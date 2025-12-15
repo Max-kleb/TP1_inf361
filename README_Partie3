@@ -1,0 +1,414 @@
+Partie 3 : Infrastructure as Code avec Terraform
+📋 Description
+Configuration Terraform pour déployer et exécuter automatiquement le script de création d'utilisateurs sur un serveur VPS. Cette approche permet de gérer l'infrastructure comme du code (IaC) avec versioning, reproductibilité et automatisation complète.
+
+🎯 Objectifs
+Infrastructure as Code : Gestion déclarative du déploiement
+Automatisation complète : Upload et exécution du script Bash
+Reproductibilité : Déploiement identique à chaque exécution
+État géré : Terraform track l'état de l'infrastructure
+Idempotence : Réexécution sûre et prévisible
+📦 Structure des fichiers
+partie-3-terraform/
+├── README.md                     # Ce fichier
+├── main.tf                       # Configuration principale
+├── variables.tf                  # Définition des variables
+├── outputs.tf                    # Sorties et informations
+├── terraform.tfvars.example      # Exemple de configuration
+├── terraform.tfvars             # Configuration réelle (à créer, non commité)
+├── .terraform/                   # Répertoire Terraform (auto-généré)
+├── terraform.tfstate            # État Terraform (auto-généré)
+└── terraform_logs/              # Logs récupérés (auto-créé)
+🔧 Prérequis
+Installation de Terraform
+bash
+# Ubuntu/Debian
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install terraform
+
+# Vérifier l'installation
+terraform version
+Autres prérequis
+Accès SSH au serveur cible (clé privée configurée)
+Script create_users.sh fonctionnel (Partie 1)
+Fichier users.txt préparé
+⚙️ Configuration
+1. Créer le fichier de configuration
+bash
+# Copier l'exemple
+cp terraform.tfvars.example terraform.tfvars
+
+# Éditer avec vos valeurs
+nano terraform.tfvars
+2. Configuration minimale requise
+terraform.tfvars :
+
+hcl
+# OBLIGATOIRE: Remplacer par vos vraies valeurs
+server_ip                = "51.15.123.45"
+ssh_user                 = "root"
+ssh_private_key_path     = "~/.ssh/id_rsa"
+ssh_port                 = 22
+
+# Chemins vers les fichiers
+script_path              = "../partie-1-bash/create_users.sh"
+users_file_path          = "../users.txt"
+
+# Configuration
+group_name               = "students-inf-361"
+3. Vérifier les chemins
+bash
+# Vérifier que le script existe
+ls -lh ../partie-1-bash/create_users.sh
+
+# Vérifier que le fichier utilisateurs existe
+ls -lh ../users.txt
+
+# Vérifier que la clé SSH existe
+ls -lh ~/.ssh/id_rsa
+
+# Tester la connexion SSH
+ssh -p 22 -i ~/.ssh/id_rsa root@51.15.123.45 'echo "Connection OK"'
+🚀 Utilisation
+Workflow Terraform standard
+bash
+# 1. Initialiser Terraform (première fois uniquement)
+terraform init
+
+# 2. Valider la configuration
+terraform validate
+
+# 3. Formatter le code (optionnel)
+terraform fmt
+
+# 4. Prévisualiser les changements
+terraform plan
+
+# 5. Appliquer la configuration
+terraform apply
+
+# 6. Confirmer avec 'yes' quand demandé
+Commandes détaillées
+1. Initialisation
+bash
+terraform init
+
+# Sortie attendue:
+# Initializing the backend...
+# Initializing provider plugins...
+# - Finding hashicorp/null versions matching "~> 3.0"...
+# - Installing hashicorp/null v3.x.x...
+# Terraform has been successfully initialized!
+2. Planification
+bash
+# Plan avec sortie détaillée
+terraform plan
+
+# Sauvegarder le plan
+terraform plan -out=tfplan
+
+# Plan avec variables spécifiques
+terraform plan -var="server_ip=192.168.1.100"
+3. Application
+bash
+# Application standard
+terraform apply
+
+# Application automatique (sans confirmation)
+terraform apply -auto-approve
+
+# Application d'un plan sauvegardé
+terraform apply tfplan
+
+# Application avec variables en ligne
+terraform apply -var="server_ip=192.168.1.100" -var="ssh_port=2222"
+4. Vérification
+bash
+# Voir l'état actuel
+terraform show
+
+# Lister les ressources
+terraform state list
+
+# Voir les outputs
+terraform output
+
+# Voir un output spécifique
+terraform output server_connection_info
+terraform output useful_commands
+5. Destruction (si nécessaire)
+bash
+# Détruire l'infrastructure (ne supprime PAS les utilisateurs créés)
+terraform destroy
+
+# Destruction automatique
+terraform destroy -auto-approve
+📊 Sorties (Outputs)
+Après une exécution réussie, Terraform affiche :
+
+hcl
+Outputs:
+
+deployment_summary = {
+  "group_name" = "students-inf-361"
+  "script_executed" = true
+  "server_ip" = "51.15.123.45"
+  "ssh_port" = 22
+  "timestamp" = "2025-12-15T14:30:00Z"
+}
+
+server_connection_info = {
+  "ip_address" = "51.15.123.45"
+  "ssh_command" = "ssh -p 22 root@51.15.123.45"
+  "ssh_port" = 22
+  "ssh_user" = "root"
+}
+
+useful_commands = {
+  "connect_to_server" = "ssh -p 22 root@51.15.123.45"
+  "download_latest_log" = "scp -P 22 root@51.15.123.45:/tmp/logs/user_creation_*.log ."
+  "list_group_users" = "ssh -p 22 root@51.15.123.45 'getent group students-inf-361'"
+  "test_user_connection" = "ssh -p 22 USERNAME@51.15.123.45"
+  "view_remote_logs" = "ssh -p 22 root@51.15.123.45 'ls -lh /tmp/logs/'"
+}
+
+next_steps = <<EOT
+
+════════════════════════════════════════════════════════════════
+                ✅ TERRAFORM DEPLOYMENT COMPLETED
+════════════════════════════════════════════════════════════════
+
+📋 PROCHAINES ÉTAPES RECOMMANDÉES:
+
+1. Vérifier les utilisateurs créés:
+   ssh -p 22 root@51.15.123.45 'getent group students-inf-361'
+
+2. Tester la connexion d'un utilisateur:
+   ssh -p 22 USERNAME@51.15.123.45
+...
+🔍 Fonctionnement détaillé
+1. Ressources créées
+Terraform crée les ressources null_resource suivantes :
+
+upload_script : Upload le script Bash et le fichier users.txt
+execute_script : Exécute le script sur le serveur
+fetch_logs : Télécharge les logs (optionnel)
+cleanup : Nettoie les fichiers temporaires (optionnel)
+display_summary : Affiche un résumé local
+2. Triggers et Idempotence
+hcl
+triggers = {
+  script_hash = filemd5(var.script_path)
+  users_hash  = filemd5(var.users_file_path)
+}
+Terraform détecte les changements via hash MD5 et ne réexécute que si nécessaire.
+
+3. Gestion de l'état
+bash
+# Voir l'état
+cat terraform.tfstate
+
+# Inspecter une ressource
+terraform state show null_resource.execute_script
+
+# Lister toutes les ressources
+terraform state list
+🐛 Dépannage
+Erreur: "Connection timeout"
+bash
+# Vérifier la connexion SSH manuellement
+ssh -v -p 22 -i ~/.ssh/id_rsa root@51.15.123.45
+
+# Augmenter le timeout dans variables.tf
+connection_timeout = 15
+Erreur: "File not found"
+bash
+# Vérifier les chemins relatifs
+ls -lh ../partie-1-bash/create_users.sh
+ls -lh ../users.txt
+
+# Utiliser des chemins absolus si nécessaire
+script_path = "/home/user/projet/partie-1-bash/create_users.sh"
+Erreur: "Permission denied"
+bash
+# Vérifier les permissions de la clé SSH
+chmod 600 ~/.ssh/id_rsa
+
+# Vérifier l'utilisateur SSH
+ssh -p 22 root@51.15.123.45 'whoami'
+Erreur: "Script execution failed"
+bash
+# Se connecter au serveur pour debug
+ssh -p 22 root@51.15.123.45
+
+# Vérifier les logs
+cat /tmp/logs/user_creation_*.log
+
+# Exécuter le script manuellement
+cd /tmp
+sudo bash create_users.sh students-inf-361 users.txt
+État Terraform corrompu
+bash
+# Sauvegarder l'état actuel
+cp terraform.tfstate terraform.tfstate.backup
+
+# Supprimer et réinitialiser
+rm -rf .terraform terraform.tfstate*
+terraform init
+🔐 Bonnes pratiques de sécurité
+1. Gestion des secrets
+bash
+# NE JAMAIS commiter terraform.tfvars
+echo "terraform.tfvars" >> .gitignore
+echo "terraform.tfstate*" >> .gitignore
+echo ".terraform/" >> .gitignore
+2. Protection de l'état
+bash
+# Utiliser un backend distant (S3, Terraform Cloud, etc.)
+# terraform {
+#   backend "s3" {
+#     bucket = "my-terraform-state"
+#     key    = "inf361/terraform.tfstate"
+#     region = "eu-west-1"
+#   }
+# }
+3. Variables sensibles
+hcl
+# Dans variables.tf
+variable "ssh_private_key_content" {
+  description = "Contenu de la clé privée SSH"
+  type        = string
+  sensitive   = true
+}
+
+# Dans outputs.tf
+output "ssh_connection_string" {
+  value     = "..."
+  sensitive = true
+}
+📝 Workflow recommandé
+Développement
+bash
+# 1. Modifier le code
+nano main.tf
+
+# 2. Formater
+terraform fmt
+
+# 3. Valider
+terraform validate
+
+# 4. Planifier
+terraform plan
+
+# 5. Appliquer en dev
+terraform apply -var="environment=dev"
+Production
+bash
+# 1. Test complet en staging
+terraform apply -var="environment=staging"
+
+# 2. Vérifier les résultats
+ssh user@staging-server 'getent group students-inf-361'
+
+# 3. Déployer en production
+terraform apply -var="environment=prod"
+
+# 4. Sauvegarder l'état
+cp terraform.tfstate terraform.tfstate.prod.backup
+💡 Améliorations possibles
+1. Modules Terraform
+hcl
+# modules/user_management/main.tf
+module "user_management" {
+  source = "./modules/user_management"
+  
+  server_ip   = var.server_ip
+  group_name  = var.group_name
+  users_file  = var.users_file_path
+}
+2. Backend distant
+hcl
+terraform {
+  backend "s3" {
+    bucket = "my-terraform-state"
+    key    = "inf361/terraform.tfstate"
+    region = "eu-west-1"
+  }
+}
+3. Workspaces
+bash
+# Créer des environnements séparés
+terraform workspace new dev
+terraform workspace new staging
+terraform workspace new prod
+
+# Sélectionner un workspace
+terraform workspace select dev
+
+# Lister les workspaces
+terraform workspace list
+4. Provisioning cloud
+hcl
+# Créer une VM et y exécuter le script
+resource "aws_instance" "vps" {
+  ami           = "ami-xxxxx"
+  instance_type = "t2.micro"
+  
+  provisioner "remote-exec" {
+    inline = [
+      "sudo bash /tmp/create_users.sh students-inf-361 /tmp/users.txt"
+    ]
+  }
+}
+🔄 Intégration CI/CD
+GitLab CI
+yaml
+# .gitlab-ci.yml
+terraform:
+  image: hashicorp/terraform:latest
+  script:
+    - terraform init
+    - terraform validate
+    - terraform plan
+    - terraform apply -auto-approve
+  only:
+    - main
+GitHub Actions
+yaml
+# .github/workflows/terraform.yml
+name: Terraform
+on: [push]
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hashicorp/setup-terraform@v2
+      - run: terraform init
+      - run: terraform plan
+      - run: terraform apply -auto-approve
+📚 Références
+Terraform Documentation
+Terraform Best Practices
+Provisioners Documentation
+Null Provider
+✅ Checklist de tests
+ Terraform installé et fonctionnel
+ Variables configurées dans terraform.tfvars
+ Connexion SSH au serveur testée
+ Script Bash fonctionnel (Partie 1)
+ terraform init réussi
+ terraform validate réussi
+ terraform plan affiche les bonnes ressources
+ terraform apply exécuté avec succès
+ Utilisateurs créés sur le serveur
+ Logs téléchargés localement
+ Outputs affichés correctement
+ État Terraform propre
+ Fichiers sensibles non commités
+👤 Auteur
+Étudiant Licence 3 Informatique - Université de Yaoundé I
+Cours: INF 3611 - Administration Systèmes et Réseaux
+

@@ -1,0 +1,350 @@
+Partie 2 : Playbook Ansible
+📋 Description
+Playbook Ansible complet qui reproduit toutes les fonctionnalités du script Bash avec en plus l'envoi automatique d'emails personnalisés à chaque utilisateur créé.
+
+🎯 Fonctionnalités
+✅ Toutes les fonctionnalités de la Partie 1
+Création du groupe students-inf-361
+Création d'utilisateurs avec métadonnées complètes
+Vérification et installation de shells
+Hachage SHA-512 des mots de passe
+Changement de mot de passe obligatoire
+Accès sudo avec restriction de su
+Messages de bienvenue personnalisés
+Quotas disque (15 Go)
+Limites mémoire (20% RAM)
+➕ Fonctionnalités supplémentaires
+Envoi d'email automatique avec :
+Adresse IP du serveur
+Port SSH
+Nom d'utilisateur
+Mot de passe initial
+Commande SSH de connexion
+Commandes pour transférer la clé publique (Linux/Mac/Windows)
+Orchestration multi-serveurs
+Idempotence garantie
+Gestion d'erreurs avancée
+📦 Structure des fichiers
+partie-2-ansible/
+├── README.md                 # Ce fichier
+├── create_users.yml          # Playbook principal
+├── inventory.ini             # Inventaire des serveurs
+├── ansible.cfg              # Configuration Ansible (optionnel)
+└── templates/               # Templates (optionnel)
+    └── welcome_email.j2
+🔧 Prérequis
+Sur la machine de contrôle (votre PC)
+bash
+# Installer Ansible
+sudo apt update
+sudo apt install -y ansible
+
+# Vérifier l'installation
+ansible --version
+
+# Installer les collections nécessaires (si besoin)
+ansible-galaxy collection install ansible.posix
+ansible-galaxy collection install community.general
+Sur le serveur cible
+bash
+# Python 3 doit être installé
+sudo apt install -y python3 python3-pip
+
+# Configurer l'accès SSH par clés
+ssh-copy-id -p PORT user@SERVER_IP
+⚙️ Configuration
+1. Configurer l'inventaire
+Éditer inventory.ini :
+
+ini
+[vps_servers]
+vps1 ansible_host=51.15.123.45
+
+[vps_servers:vars]
+ansible_user=root
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_python_interpreter=/usr/bin/python3
+Remplacer :
+
+51.15.123.45 par l'IP de votre serveur
+ansible_user=root si vous utilisez un autre utilisateur
+Ajouter ansible_port=2222 si SSH n'est pas sur le port 22
+2. Configurer l'envoi d'emails
+Éditer create_users.yml et modifier les variables :
+
+yaml
+vars:
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_username: "votre-email@gmail.com"
+  smtp_password: "votre-mot-de-passe-app"
+  email_from: "admin@uy1.cm"
+  ssh_port: 22  # Port SSH de votre serveur
+Configuration Gmail (recommandé)
+Activer l'authentification à 2 facteurs sur votre compte Gmail
+Générer un mot de passe d'application :
+Aller sur https://myaccount.google.com/security
+Chercher "Mots de passe des applications"
+Générer un nouveau mot de passe pour "Autre (nom personnalisé)"
+Utiliser ce mot de passe dans smtp_password
+Autres fournisseurs SMTP
+yaml
+# Outlook/Hotmail
+smtp_host: "smtp-mail.outlook.com"
+smtp_port: 587
+
+# Yahoo
+smtp_host: "smtp.mail.yahoo.com"
+smtp_port: 587
+
+# Serveur SMTP personnalisé
+smtp_host: "mail.votre-domaine.com"
+smtp_port: 587  # ou 465 pour SSL
+3. Tester la connexion
+bash
+# Tester la connectivité
+ansible -i inventory.ini vps_servers -m ping
+
+# Vérifier les facts du serveur
+ansible -i inventory.ini vps_servers -m setup
+
+# Tester une commande simple
+ansible -i inventory.ini vps_servers -m command -a "uptime"
+🚀 Utilisation
+1. Exécution du playbook
+bash
+# Exécution standard
+ansible-playbook -i inventory.ini create_users.yml
+
+# Avec verbosité (pour debug)
+ansible-playbook -i inventory.ini create_users.yml -v
+ansible-playbook -i inventory.ini create_users.yml -vv
+ansible-playbook -i inventory.ini create_users.yml -vvv
+
+# Dry-run (simulation sans modification)
+ansible-playbook -i inventory.ini create_users.yml --check
+
+# Exécuter uniquement certaines tâches (tags)
+ansible-playbook -i inventory.ini create_users.yml --tags "users"
+2. Surcharger des variables
+bash
+# Changer le fichier utilisateurs
+ansible-playbook -i inventory.ini create_users.yml -e "users_file=../other_users.txt"
+
+# Changer le nom du groupe
+ansible-playbook -i inventory.ini create_users.yml -e "group_name=my-custom-group"
+
+# Changer le quota disque
+ansible-playbook -i inventory.ini create_users.yml -e "disk_quota_gb=20"
+
+# Désactiver l'envoi d'emails (en commentant le task)
+ansible-playbook -i inventory.ini create_users.yml --skip-tags "email"
+3. Exécution sur plusieurs serveurs
+ini
+# inventory.ini
+[vps_servers]
+vps1 ansible_host=192.168.1.100
+vps2 ansible_host=192.168.1.101
+vps3 ansible_host=192.168.1.102
+bash
+# Exécuter sur tous les serveurs
+ansible-playbook -i inventory.ini create_users.yml
+
+# Limiter à un serveur spécifique
+ansible-playbook -i inventory.ini create_users.yml --limit vps1
+📧 Format de l'email envoyé
+Chaque utilisateur reçoit un email contenant :
+
+Sujet: Votre compte VPS a été créé - Cours INF 3611
+
+Bonjour Alice Kamga,
+
+Votre compte utilisateur a été créé avec succès sur le serveur VPS du cours INF 3611.
+
+═══════════════════════════════════════════════════════════════════════
+📋 INFORMATIONS DE CONNEXION
+═══════════════════════════════════════════════════════════════════════
+
+🖥️  Adresse IP du serveur : 51.15.123.45
+🔌 Port SSH              : 22
+👤 Nom d'utilisateur     : alice
+🔐 Mot de passe initial  : P@ssw0rd123
+
+⚠️  IMPORTANT : Vous DEVEZ changer ce mot de passe lors de votre première connexion.
+
+═══════════════════════════════════════════════════════════════════════
+🔧 COMMANDES UTILES
+═══════════════════════════════════════════════════════════════════════
+
+📡 Commande de connexion SSH :
+
+   ssh -p 22 alice@51.15.123.45
+
+🔑 Transférer votre clé publique SSH (recommandé) :
+
+   - Depuis Linux/Mac :
+     ssh-copy-id -p 22 alice@51.15.123.45
+
+   - Depuis Windows (PowerShell) :
+     type $env:USERPROFILE\.ssh\id_rsa.pub | ssh -p 22 alice@51.15.123.45 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+
+   - Alternative multiplateforme :
+     cat ~/.ssh/id_rsa.pub | ssh -p 22 alice@51.15.123.45 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+
+...
+🔍 Vérification
+Tester les créations
+bash
+# Vérifier les utilisateurs sur le serveur
+ansible -i inventory.ini vps_servers -m command -a "getent group students-inf-361"
+
+# Vérifier un utilisateur spécifique
+ansible -i inventory.ini vps_servers -m command -a "id alice"
+
+# Vérifier les quotas
+ansible -i inventory.ini vps_servers -m command -a "quota -u alice" -b
+Consulter les logs Ansible
+bash
+# Voir les logs de la dernière exécution
+cat /var/log/ansible.log
+
+# Logs en temps réel
+tail -f /var/log/ansible.log
+📊 Sortie attendue
+PLAY [Création automatisée d'utilisateurs Linux avec envoi d'emails] ***********
+
+TASK [Gathering Facts] **********************************************************
+ok: [vps1]
+
+TASK [0.1 - Afficher un message de début] **************************************
+ok: [vps1] => {
+    "msg": "╔════════════════════════════════════════════════════════════════╗\n║      ANSIBLE - CRÉATION AUTOMATISÉE D'UTILISATEURS            ║\n║                 UNIVERSITÉ DE YAOUNDÉ I                        ║\n║          INF 3611 - Administration Systèmes et Réseaux         ║\n╚════════════════════════════════════════════════════════════════╝\n"
+}
+
+TASK [0.2 - Installer les dépendances système] *********************************
+changed: [vps1]
+
+...
+
+TASK [5.1 - Créer les utilisateurs] *********************************************
+changed: [vps1] => (item={'username': 'alice', ...})
+changed: [vps1] => (item={'username': 'bob', ...})
+
+...
+
+TASK [9.2 - Envoyer un email personnalisé à chaque utilisateur] ****************
+ok: [vps1] => (item={'username': 'alice', ...})
+ok: [vps1] => (item={'username': 'bob', ...})
+
+TASK [10.1 - Afficher le résumé final] ******************************************
+ok: [vps1] => {
+    "msg": "✅ CRÉATION D'UTILISATEURS TERMINÉE AVEC SUCCÈS\n..."
+}
+
+PLAY RECAP **********************************************************************
+vps1                       : ok=25   changed=8    unreachable=0    failed=0
+⚠️ Gestion des erreurs
+Problème de connexion SSH
+bash
+# Vérifier la connexion SSH manuelle
+ssh -p PORT user@IP
+
+# Désactiver la vérification des clés d'hôte (dev uniquement)
+export ANSIBLE_HOST_KEY_CHECKING=False
+ansible-playbook -i inventory.ini create_users.yml
+Problème d'envoi d'email
+yaml
+# Option 1: Ignorer les erreurs d'email (déjà dans le playbook)
+ignore_errors: yes
+
+# Option 2: Désactiver complètement l'envoi d'emails
+# Commenter le task 9.2 dans create_users.yml
+Problème de permissions
+bash
+# S'assurer que l'utilisateur peut utiliser sudo
+ansible-playbook -i inventory.ini create_users.yml --become --ask-become-pass
+
+# Ou configurer sudoers sur le serveur
+echo "ansible_user ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/ansible_user
+Problème de quotas
+Les quotas nécessitent une configuration spécifique de la partition :
+
+bash
+# Se connecter au serveur
+ssh user@server
+
+# Éditer /etc/fstab
+sudo nano /etc/fstab
+
+# Ajouter usrquota,grpquota aux options
+# Avant: UUID=xxx /home ext4 defaults 0 2
+# Après:  UUID=xxx /home ext4 defaults,usrquota,grpquota 0 2
+
+# Remonter et initialiser
+sudo mount -o remount /home
+sudo quotacheck -cugm /home
+sudo quotaon /home
+🔐 Bonnes pratiques de sécurité
+1. Protection des identifiants SMTP
+Ne jamais commiter les mots de passe dans Git !
+
+bash
+# Créer un fichier de variables sécurisé
+echo "smtp_password: votre_mot_de_passe" > secrets.yml
+
+# Chiffrer avec Ansible Vault
+ansible-vault encrypt secrets.yml
+
+# Utiliser dans le playbook
+ansible-playbook -i inventory.ini create_users.yml --extra-vars "@secrets.yml" --ask-vault-pass
+2. Variables d'environnement
+bash
+# Définir les variables sensibles
+export SMTP_PASSWORD="votre_mot_de_passe"
+
+# Utiliser dans le playbook
+ansible-playbook -i inventory.ini create_users.yml -e "smtp_password=${SMTP_PASSWORD}"
+3. Fichier ansible.cfg
+Créer ansible.cfg :
+
+ini
+[defaults]
+inventory = inventory.ini
+remote_user = root
+host_key_checking = False
+retry_files_enabled = False
+log_path = ./ansible.log
+
+[privilege_escalation]
+become = True
+become_method = sudo
+become_user = root
+become_ask_pass = False
+💡 Améliorations possibles
+Templates Jinja2 : Externaliser les templates d'email
+Roles Ansible : Organiser en rôles réutilisables
+Handlers : Gérer les redémarrages de services
+Dynamic Inventory : Intégration avec cloud providers
+Tests : Ajouter des assertions et validations
+Notifications : Slack, Discord, etc.
+📚 Références
+Ansible Documentation
+Ansible User Module
+Ansible Mail Module
+Ansible Best Practices
+✅ Checklist de tests
+ Connexion Ansible fonctionnelle
+ Playbook s'exécute sans erreur
+ Utilisateurs créés correctement
+ Groupe créé
+ Restrictions sudo actives
+ Messages de bienvenue configurés
+ Quotas configurés
+ Limites mémoire actives
+ Emails reçus par tous les utilisateurs
+ Commandes SSH dans emails correctes
+ Idempotence (réexécution = pas de changement)
+👤 Auteur
+Étudiant Licence 3 Informatique - Université de Yaoundé I
+Cours: INF 3611 - Administration Systèmes et Réseaux
+

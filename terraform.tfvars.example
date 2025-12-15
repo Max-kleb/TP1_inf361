@@ -1,0 +1,107 @@
+################################################################################
+# Fichier: terraform.tfvars.example
+# Description: Exemple de fichier de variables Terraform
+#              Copier ce fichier vers terraform.tfvars et adapter les valeurs
+# Auteur: Étudiant Licence 3 Informatique - UY1
+# Cours: INF 3611 - Administration Systèmes et Réseaux
+################################################################################
+
+# ============================================================================
+# CONFIGURATION SSH - À MODIFIER OBLIGATOIREMENT
+# ============================================================================
+
+# Adresse IP de votre serveur VPS
+server_ip = "192.168.1.100"  # REMPLACER PAR VOTRE IP
+
+# Port SSH (modifier si vous avez changé le port par défaut)
+ssh_port = 22
+
+# Utilisateur SSH pour la connexion
+ssh_user = "root"
+
+# Chemin vers votre clé privée SSH
+ssh_private_key_path = "~/.ssh/id_rsa"
+
+# ============================================================================
+# CONFIGURATION DU GROUPE ET DES FICHIERS
+# ============================================================================
+
+# Nom du groupe principal
+group_name = "students-inf-361"
+
+# Chemin vers le script Bash (relatif ou absolu)
+script_path = "../partie-1-bash/create_users.sh"
+
+# Chemin vers le fichier des utilisateurs
+users_file_path = "../users.txt"
+
+# ============================================================================
+# CONFIGURATION DES QUOTAS ET LIMITES
+# ============================================================================
+
+# Quota disque par utilisateur (en Go)
+disk_quota_gb = 15
+
+# Limite mémoire par processus (en % de la RAM)
+memory_limit_percent = 20
+
+# ============================================================================
+# OPTIONS DE GESTION DES LOGS
+# ============================================================================
+
+# Télécharger les logs après exécution
+fetch_logs = true
+
+# Nettoyer les fichiers temporaires après exécution
+cleanup_temp_files = false
+
+# ============================================================================
+# MÉTADONNÉES DU PROJET
+# ============================================================================
+
+# Nom du projet
+project_name = "INF-3611-User-Management"
+
+# Environnement (dev, staging, prod)
+environment = "dev"
+
+# Tags personnalisés
+tags = {
+  Course      = "INF-3611"
+  University  = "UY1"
+  Department  = "Informatique"
+  Managed_by  = "Terraform"
+  Student     = "Votre Nom"
+}
+
+# ============================================================================
+# CONFIGURATION AVANCÉE (optionnel)
+# ============================================================================
+
+# Timeout pour les connexions SSH (en minutes)
+connection_timeout = 10
+
+# Nombre de tentatives en cas d'échec
+retry_attempts = 3
+
+# Activer la sortie détaillée
+enable_verbose_output = true
+
+# ============================================================================
+# EXEMPLES DE CONFIGURATIONS ALTERNATIVES
+# ============================================================================
+
+# Configuration pour serveur avec port SSH personnalisé:
+# server_ip = "51.15.123.45"
+# ssh_port = 2222
+# ssh_user = "ubuntu"
+
+# Configuration pour environnement de production:
+# environment = "prod"
+# cleanup_temp_files = true
+# disk_quota_gb = 20
+
+# Configuration pour test local:
+# server_ip = "127.0.0.1"
+# ssh_user = "vagrant"
+# ssh_private_key_path = ".vagrant/machines/default/virtualbox/private_key"

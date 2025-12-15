@@ -1,0 +1,260 @@
+# ============================================================================
+# .gitignore - TP INF 3611
+# Fichiers et répertoires à exclure du contrôle de version
+# ============================================================================
+
+# ============================================================================
+# FICHIERS SENSIBLES - NE JAMAIS COMMITER
+# ============================================================================
+
+# Fichiers de configuration avec mots de passe
+terraform.tfvars
+secrets.yml
+.vault_pass
+*.secret
+
+# Clés SSH et certificats
+*.pem
+*.key
+*.crt
+*.p12
+id_rsa*
+id_ed25519*
+authorized_keys
+
+# ============================================================================
+# LOGS ET FICHIERS TEMPORAIRES
+# ============================================================================
+
+# Logs
+*.log
+logs/
+*.log.*
+/tmp/
+
+# Fichiers temporaires
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================================================
+# TERRAFORM
+# ============================================================================
+
+# Fichiers d'état Terraform (contiennent des infos sensibles)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Répertoire Terraform
+.terraform/
+.terraform.lock.hcl
+
+# Plans Terraform
+*.tfplan
+*.tfplan.*
+
+# Logs Terraform
+terraform_logs/
+crash.log
+crash.*.log
+
+# Variables d'environnement
+.terraformrc
+terraform.rc
+
+# ============================================================================
+# ANSIBLE
+# ============================================================================
+
+# Retry files
+*.retry
+
+# Inventaire dynamique
+inventory/dynamic/
+
+# Fichiers de vault
+vault.yml
+vault_*.yml
+
+# Logs Ansible
+ansible.log
+*.ansible.log
+
+# Collections téléchargées
+collections/
+
+# ============================================================================
+# BASH / SCRIPTS
+# ============================================================================
+
+# Fichiers de backup
+*.bak
+*.backup
+*.old
+
+# Répertoire de logs du script
+partie-1-bash/logs/
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environnements virtuels
+venv/
+env/
+ENV/
+.venv
+
+# ============================================================================
+# DONNÉES SENSIBLES
+# ============================================================================
+
+# Fichier utilisateurs réel (peut contenir des mots de passe)
+# Décommenter si vous ne voulez pas commiter users.txt
+# users.txt
+
+# Sauvegardes de bases de données
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# Fichiers CSV avec données sensibles
+*_passwords.csv
+*_credentials.csv
+
+# ============================================================================
+# ÉDITEURS ET IDEs
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ============================================================================
+# SYSTÈMES D'EXPLOITATION
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# COMPRESSION / ARCHIVES
+# ============================================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.bz2
+
+# ============================================================================
+# DOCUMENTATION GÉNÉRÉE
+# ============================================================================
+
+# HTML généré
+*.html
+!README.html
+
+# PDF généré (si auto-généré)
+# *.pdf
+
+# ============================================================================
+# CONFIGURATIONS LOCALES
+# ============================================================================
+
+# Configurations locales de développement
+.env
+.env.local
+.env.*.local
+local.config
+config.local.*
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+# Résultats de tests
+test_results/
+coverage/
+.coverage
+*.cover
+htmlcov/
+
+# ============================================================================
+# NOTES ET BROUILLONS
+# ============================================================================
+
+# Notes personnelles
+notes.txt
+notes.md
+TODO.md
+DRAFT.md
+brouillon/
+scratch/
+
+# ============================================================================
+# EXEMPLES - Garder les exemples
+# ============================================================================
+
+# Ne PAS ignorer les fichiers d'exemple
+!*.example
+!*_example.*
+!example_*
+
+# ============================================================================
+# README - Toujours commiter
+# ============================================================================
+
+# S'assurer que les README sont toujours inclus
+!README.md
+!*/README.md

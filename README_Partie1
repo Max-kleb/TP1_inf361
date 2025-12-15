@@ -1,0 +1,254 @@
+Partie 1 : Script Bash d'automatisation
+📋 Description
+Script Bash complet pour automatiser la création d'utilisateurs sur un serveur Linux avec toutes les configurations de sécurité et restrictions nécessaires.
+
+🎯 Fonctionnalités implémentées
+✅ Exigences de base
+Création de groupe personnalisé passé en paramètre
+Création d'utilisateurs avec :
+Nom d'utilisateur
+Informations complètes (nom complet, téléphone, email)
+Shell préféré (vérification + installation automatique)
+Répertoire personnel
+✅ Sécurité
+Groupe students-inf-361 : Tous les utilisateurs ajoutés
+Hachage SHA-512 des mots de passe
+Changement obligatoire du mot de passe à la première connexion
+Accès sudo avec restriction de la commande su
+✅ Personnalisation
+Message de bienvenue personnalisé affiché à chaque connexion
+Quotas disque : Maximum 15 Go par utilisateur
+Limites mémoire : Maximum 20% de la RAM par processus
+✅ Traçabilité
+Journalisation complète avec date, heure et détails de chaque opération
+📦 Structure des fichiers
+partie-1-bash/
+├── README.md                 # Ce fichier
+├── create_users.sh           # Script principal
+├── logs/                     # Répertoire des logs (créé automatiquement)
+│   └── user_creation_*.log
+└── test_users.txt           # Fichier de test (optionnel)
+🔧 Prérequis
+Système
+Ubuntu 20.04+ / Debian 10+ / CentOS 8+
+Accès root ou sudo
+Dépendances
+bash
+# Installer les outils nécessaires
+sudo apt update
+sudo apt install -y quota libpam-modules
+
+# Activer les quotas sur la partition /home
+sudo nano /etc/fstab
+# Ajouter usrquota,grpquota aux options de montage
+# Exemple: UUID=xxx /home ext4 defaults,usrquota,grpquota 0 2
+
+# Remonter et initialiser les quotas
+sudo mount -o remount /home
+sudo quotacheck -cugm /home
+sudo quotaon /home
+🚀 Utilisation
+1. Préparation
+bash
+# Rendre le script exécutable
+chmod +x create_users.sh
+
+# Vérifier le format du fichier users.txt
+cat users.txt
+2. Format du fichier users.txt
+text
+username;password;Full Name;+237XXXXXXXXX;email@domain.cm;/bin/bash
+alice;P@ssw0rd123;Alice Kamga;+237698765432;alice@uy1.cm;/bin/bash
+bob;Secure456!;Bob Nguema;+237677889900;bob@uy1.cm;/bin/zsh
+Champs (séparés par ;):
+
+username : Nom d'utilisateur (obligatoire)
+password : Mot de passe initial (obligatoire)
+Full Name : Nom complet
+phone : Numéro de téléphone
+email : Adresse email
+shell : Chemin du shell préféré
+3. Exécution
+bash
+# Syntaxe générale
+sudo ./create_users.sh <nom_du_groupe> <fichier_utilisateurs>
+
+# Exemple
+sudo ./create_users.sh students-inf-361 ../users.txt
+4. Sortie attendue
+╔════════════════════════════════════════════════════════════════╗
+║         SCRIPT DE CRÉATION AUTOMATISÉE D'UTILISATEURS         ║
+║                  UNIVERSITÉ DE YAOUNDÉ I                       ║
+║            INF 3611 - Administration Systèmes et Réseaux       ║
+╚════════════════════════════════════════════════════════════════╝
+
+✓ Vérifications préliminaires réussies
+
+🔧 Configuration du groupe...
+✓ Groupe students-inf-361 créé
+✓ Restrictions sudo configurées
+
+📄 Traitement du fichier utilisateurs...
+
+🔧 Création de l'utilisateur: alice
+  ✓ Compte créé
+  ✓ Mot de passe configuré
+  ✓ Changement obligatoire activé
+  ✓ Message de bienvenue configuré
+  ✓ Limites mémoire configurées
+  ✓ Configuration complète
+
+...
+
+═══════════════════════════════════════════════
+✅ Résumé de l'exécution:
+   • Utilisateurs créés: 6
+═══════════════════════════════════════════════
+
+✅ Script terminé avec succès!
+📋 Consultez le log pour plus de détails: ./logs/user_creation_20251215_143022.log
+🔍 Vérification
+Tester les créations
+bash
+# Vérifier qu'un utilisateur existe
+id alice
+
+# Vérifier le groupe
+getent group students-inf-361
+
+# Vérifier les informations complètes
+getent passwd alice
+
+# Tester la connexion locale
+ssh alice@localhost
+# Vous devrez changer le mot de passe à la première connexion
+
+# Vérifier les quotas
+sudo quota -u alice
+
+# Vérifier les limites
+su - alice
+ulimit -a
+Vérifier les restrictions sudo
+bash
+# Se connecter en tant qu'utilisateur
+su - alice
+
+# Tester sudo (devrait fonctionner)
+sudo ls /root
+
+# Tester su (devrait être refusé)
+su -
+# Sortie attendue: Sorry, user alice is not allowed to execute '/bin/su -' as root
+Consulter les logs
+bash
+# Voir le dernier log créé
+ls -lt logs/
+cat logs/user_creation_*.log
+
+# Filtrer les erreurs
+grep ERROR logs/user_creation_*.log
+
+# Filtrer les succès
+grep "créé avec succès" logs/user_creation_*.log
+🔐 Détails des configurations
+1. Hachage des mots de passe (SHA-512)
+Le script utilise chpasswd -c SHA512 pour hasher les mots de passe avec l'algorithme SHA-512, qui est l'un des plus sécurisés.
+
+bash
+echo "$username:$password" | chpasswd -c SHA512
+2. Restriction de la commande su
+Fichier créé : /etc/sudoers.d/students-inf-361
+
+%students-inf-361 ALL=(ALL:ALL) ALL, !/bin/su, !/usr/bin/su
+Les utilisateurs peuvent utiliser sudo mais pas su.
+
+3. Quotas disque (15 Go)
+bash
+setquota -u username 15728640 15728640 0 0 /home
+Soft limit = Hard limit = 15 GB (en blocs de 1K)
+
+4. Limites mémoire (20% RAM)
+Fichier créé : /etc/security/limits.d/username.conf
+
+username soft rss 20% de RAM totale
+username hard rss 20% de RAM totale
+5. Message de bienvenue
+Fichier : ~/WELCOME.txt pour chaque utilisateur
+Affiché automatiquement via ~/.bashrc
+Contient : informations du compte, règles de sécurité, quotas
+⚠️ Gestion des erreurs
+Le script gère intelligemment :
+
+Shell inexistant : Tentative d'installation automatique, sinon /bin/bash
+Utilisateur existant : Avertissement, pas de modification
+Groupe existant : Avertissement, utilisation du groupe existant
+Quotas non supportés : Avertissement, continue sans quotas
+Ligne invalide : Ignorée avec log d'erreur
+📊 Format des logs
+[2025-12-15 14:30:22] [INFO] ════════════════════════════════════════
+[2025-12-15 14:30:22] [INFO] DÉBUT DE L'EXÉCUTION DU SCRIPT
+[2025-12-15 14:30:22] [INFO] Date: 2025-12-15 14:30:22
+[2025-12-15 14:30:22] [INFO] Groupe cible: students-inf-361
+[2025-12-15 14:30:22] [INFO] Fichier source: users.txt
+[2025-12-15 14:30:23] [INFO] Groupe students-inf-361 créé avec succès
+[2025-12-15 14:30:23] [INFO] Création de l'utilisateur: alice
+[2025-12-15 14:30:24] [INFO] ✓ Utilisateur alice créé et configuré avec succès
+...
+🐛 Dépannage
+Erreur: "Permission denied"
+bash
+# S'assurer d'exécuter avec sudo
+sudo ./create_users.sh students-inf-361 users.txt
+Erreur: "quota: command not found"
+bash
+# Installer les outils de quotas
+sudo apt install -y quota
+Les quotas ne fonctionnent pas
+bash
+# Vérifier que les quotas sont activés
+sudo quotaon -p /home
+
+# Si désactivés, les activer
+sudo quotaon /home
+Le shell zsh/fish n'est pas installé
+Le script tentera de l'installer automatiquement. Si échec :
+
+bash
+# Installation manuelle
+sudo apt install -y zsh fish
+Message de bienvenue ne s'affiche pas
+bash
+# Vérifier que le fichier existe
+ls -la ~username/WELCOME.txt
+
+# Vérifier .bashrc
+cat ~username/.bashrc | grep WELCOME
+💡 Améliorations possibles
+Validation avancée : Vérifier la complexité des mots de passe
+Format CSV/YAML : Support de formats supplémentaires
+Notifications : Envoyer un email après création (voir Partie 2)
+Backup : Sauvegarder les configurations avant modification
+Mode dry-run : Simuler sans créer
+📚 Références
+useradd manual
+chpasswd manual
+sudoers manual
+quota manual
+limits.conf
+✅ Checklist de tests
+ Script s'exécute sans erreur
+ Groupe créé correctement
+ Utilisateurs créés avec bon shell
+ Mots de passe hachés (vérifier /etc/shadow)
+ Changement de mot de passe forcé
+ sudo fonctionne
+ su est bloqué
+ Message de bienvenue s'affiche
+ Quotas configurés (vérifier avec quota -u username)
+ Limites mémoire actives
+ Logs créés et complets
+👤 Auteur
+Étudiant Licence 3 Informatique - Université de Yaoundé I
+Cours: INF 3611 - Administration Systèmes et Réseaux
+

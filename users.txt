@@ -1,0 +1,6 @@
+alice;P@ssw0rd123;Alice Kamga;+237698765432;alice.kamga@uy1.cm;/bin/bash
+bob;Secure456!;Bob Nguema;+237677889900;bob.nguema@uy1.cm;/bin/zsh
+charlie;MyP@ss789;Charlie Mbida;+237655443322;charlie.mbida@uy1.cm;/bin/bash
+diane;SecureP@ss2024;Diane Fouda;+237699887766;diane.fouda@uy1.cm;/bin/fish
+etienne;Strong#Pass1;Etienne Nkoa;+237688776655;etienne.nkoa@uy1.cm;/bin/bash
+fatima;Complex@2024;Fatima Bello;+237677665544;fatima.bello@uy1.cm;/bin/bash

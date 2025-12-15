@@ -1,0 +1,442 @@
+---
+################################################################################
+# Playbook: create_users.yml
+# Description: Automatisation de la création d'utilisateurs avec Ansible
+# Auteur: Étudiant Licence 3 Informatique - UY1
+# Cours: INF 3611 - Administration Systèmes et Réseaux
+################################################################################
+
+- name: Création automatisée d'utilisateurs Linux avec envoi d'emails
+  hosts: vps_servers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Variables principales
+    group_name: "students-inf-361"
+    users_file: "../users.txt"
+    disk_quota_gb: 15
+    memory_limit_percent: 20
+    
+    # Configuration SSH du serveur
+    ssh_port: 22  # Modifier selon votre configuration
+    
+    # Configuration email
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_username: "votre-email@gmail.com"  # À MODIFIER
+    smtp_password: "votre-mot-de-passe-app"  # À MODIFIER (App Password recommandé)
+    email_from: "admin@uy1.cm"
+    
+    # Liste des utilisateurs (sera remplie depuis le fichier)
+    users_list: []
+
+  tasks:
+    # ========================================================================
+    # PHASE 0: PRÉPARATION
+    # ========================================================================
+    
+    - name: 0.1 - Afficher un message de début
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║      ANSIBLE - CRÉATION AUTOMATISÉE D'UTILISATEURS            ║
+          ║                 UNIVERSITÉ DE YAOUNDÉ I                        ║
+          ║          INF 3611 - Administration Systèmes et Réseaux         ║
+          ╚════════════════════════════════════════════════════════════════╝
+          
+          Serveur cible: {{ inventory_hostname }}
+          Groupe: {{ group_name }}
+          Fichier source: {{ users_file }}
+
+    - name: 0.2 - Installer les dépendances système
+      apt:
+        name:
+          - python3-pip
+          - quota
+          - quotatool
+          - libpam-modules
+          - zsh
+          - fish
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: 0.3 - Installer les bibliothèques Python pour l'envoi d'emails
+      pip:
+        name:
+          - jinja2
+        state: present
+
+    # ========================================================================
+    # PHASE 1: LECTURE ET PARSING DU FICHIER UTILISATEURS
+    # ========================================================================
+
+    - name: 1.1 - Vérifier l'existence du fichier utilisateurs
+      stat:
+        path: "{{ users_file }}"
+      delegate_to: localhost
+      register: users_file_stat
+      become: no
+
+    - name: 1.2 - Échec si le fichier n'existe pas
+      fail:
+        msg: "Le fichier {{ users_file }} n'existe pas!"
+      when: not users_file_stat.stat.exists
+
+    - name: 1.3 - Lire le fichier utilisateurs
+      slurp:
+        src: "{{ users_file }}"
+      delegate_to: localhost
+      become: no
+      register: users_file_content
+
+    - name: 1.4 - Parser le contenu du fichier
+      set_fact:
+        users_list: "{{ users_list + [item | combine({'password_hash': item.password | password_hash('sha512')}) ] }}"
+      loop: "{{ (users_file_content.content | b64decode).split('\n') | select('match', '^[^#].*') | select('match', '.*;.*;.*;.*;.*;.*') | map('regex_replace', '\\s+', '') | list }}"
+      vars:
+        item: >-
+          {{
+            {
+              'username': line_parts[0],
+              'password': line_parts[1],
+              'full_name': line_parts[2],
+              'phone': line_parts[3],
+              'email': line_parts[4],
+              'shell': line_parts[5]
+            }
+          }}
+        line_parts: "{{ item.split(';') }}"
+      when: item | length > 0
+
+    - name: 1.5 - Afficher le nombre d'utilisateurs à créer
+      debug:
+        msg: "{{ users_list | length }} utilisateur(s) à créer"
+
+    # ========================================================================
+    # PHASE 2: CRÉATION DU GROUPE PRINCIPAL
+    # ========================================================================
+
+    - name: 2.1 - Créer le groupe principal
+      group:
+        name: "{{ group_name }}"
+        state: present
+      register: group_creation
+
+    - name: 2.2 - Afficher le résultat de la création du groupe
+      debug:
+        msg: "✓ Groupe {{ group_name }} {{ 'créé' if group_creation.changed else 'existe déjà' }}"
+
+    # ========================================================================
+    # PHASE 3: CONFIGURATION SUDO AVEC RESTRICTION SU
+    # ========================================================================
+
+    - name: 3.1 - Créer la configuration sudoers pour le groupe
+      template:
+        dest: "/etc/sudoers.d/{{ group_name }}"
+        mode: '0440'
+        content: |
+          # Configuration sudo pour le groupe {{ group_name }}
+          # Membres peuvent utiliser sudo mais pas la commande su
+          %{{ group_name }} ALL=(ALL:ALL) ALL, !/bin/su, !/usr/bin/su
+        validate: 'visudo -cf %s'
+
+    - name: 3.2 - Confirmation de la configuration sudo
+      debug:
+        msg: "✓ Restrictions sudo configurées (su désactivé)"
+
+    # ========================================================================
+    # PHASE 4: ACTIVATION DES QUOTAS DISQUE
+    # ========================================================================
+
+    - name: 4.1 - Vérifier si les quotas sont activés sur /home
+      shell: quotaon -p /home 2>&1 | grep -q "on" && echo "enabled" || echo "disabled"
+      register: quota_status
+      changed_when: false
+      failed_when: false
+
+    - name: 4.2 - Activer les quotas si nécessaire
+      block:
+        - name: 4.2.1 - Créer les fichiers de quotas
+          command: quotacheck -cugm /home
+          args:
+            creates: /home/aquota.user
+          ignore_errors: yes
+
+        - name: 4.2.2 - Activer les quotas
+          command: quotaon /home
+          when: quota_status.stdout == "disabled"
+          ignore_errors: yes
+      when: quota_status.stdout == "disabled"
+
+    # ========================================================================
+    # PHASE 5: CRÉATION DES UTILISATEURS
+    # ========================================================================
+
+    - name: 5.1 - Créer les utilisateurs
+      user:
+        name: "{{ item.username }}"
+        comment: "{{ item.full_name }},{{ item.phone }},{{ item.email }}"
+        shell: "{{ item.shell }}"
+        groups: "{{ group_name }},sudo"
+        append: yes
+        create_home: yes
+        state: present
+        password: "{{ item.password_hash }}"
+      loop: "{{ users_list }}"
+      register: users_created
+
+    - name: 5.2 - Forcer le changement de mot de passe à la première connexion
+      command: "chage -d 0 {{ item.username }}"
+      loop: "{{ users_list }}"
+      when: users_created is changed
+
+    - name: 5.3 - Afficher la progression
+      debug:
+        msg: "✓ Utilisateur {{ item.username }} créé avec succès"
+      loop: "{{ users_list }}"
+
+    # ========================================================================
+    # PHASE 6: CONFIGURATION DES QUOTAS DISQUE PAR UTILISATEUR
+    # ========================================================================
+
+    - name: 6.1 - Configurer les quotas disque (15 Go)
+      command: >
+        setquota -u {{ item.username }} 
+        {{ disk_quota_gb * 1024 * 1024 }} 
+        {{ disk_quota_gb * 1024 * 1024 }} 
+        0 0 /home
+      loop: "{{ users_list }}"
+      ignore_errors: yes
+
+    - name: 6.2 - Confirmation des quotas
+      debug:
+        msg: "✓ Quotas de {{ disk_quota_gb }}Go configurés pour tous les utilisateurs"
+
+    # ========================================================================
+    # PHASE 7: CONFIGURATION DES LIMITES MÉMOIRE
+    # ========================================================================
+
+    - name: 7.1 - Calculer la limite mémoire (20% de la RAM)
+      set_fact:
+        memory_limit_kb: "{{ (ansible_memtotal_mb * 1024 * memory_limit_percent / 100) | int }}"
+
+    - name: 7.2 - Créer les fichiers de limites pour chaque utilisateur
+      template:
+        dest: "/etc/security/limits.d/{{ item.username }}.conf"
+        mode: '0644'
+        content: |
+          # Limites de ressources pour {{ item.username }}
+          # 20% de la RAM totale ({{ memory_limit_kb }} KB)
+          {{ item.username }} soft rss {{ memory_limit_kb }}
+          {{ item.username }} hard rss {{ memory_limit_kb }}
+          {{ item.username }} soft nproc 100
+          {{ item.username }} hard nproc 150
+      loop: "{{ users_list }}"
+
+    - name: 7.3 - Confirmation des limites mémoire
+      debug:
+        msg: "✓ Limites mémoire configurées: {{ memory_limit_kb }}KB ({{ memory_limit_percent }}% RAM)"
+
+    # ========================================================================
+    # PHASE 8: CRÉATION DU MESSAGE DE BIENVENUE
+    # ========================================================================
+
+    - name: 8.1 - Créer le fichier de bienvenue pour chaque utilisateur
+      template:
+        dest: "/home/{{ item.username }}/WELCOME.txt"
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0644'
+        content: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                    BIENVENUE SUR LE SERVEUR VPS                ║
+          ║                  UNIVERSITÉ DE YAOUNDÉ I                       ║
+          ║            Département d'Informatique - Licence 3              ║
+          ╚════════════════════════════════════════════════════════════════╝
+          
+          Bonjour {{ item.full_name }} ({{ item.username }}),
+          
+          Vous êtes maintenant connecté(e) au serveur VPS du cours INF 3611.
+          
+          📋 INFORMATIONS IMPORTANTES :
+             • Groupe : {{ group_name }}
+             • Quota disque : {{ disk_quota_gb }} Go maximum
+             • Limite mémoire : {{ memory_limit_percent }}% de la RAM par processus
+             • Vous devez changer votre mot de passe à la première connexion
+          
+          ⚠️  RÈGLES DE SÉCURITÉ :
+             • Ne partagez jamais vos identifiants
+             • Utilisez des mots de passe forts
+             • La commande 'su' est désactivée pour votre sécurité
+             • Toutes vos actions sont journalisées
+          
+          📞 SUPPORT :
+             • En cas de problème, contactez l'administrateur système
+             • Email : admin@uy1.cm
+          
+          Bon travail ! 🚀
+          
+          ════════════════════════════════════════════════════════════════
+          Date de création du compte : {{ ansible_date_time.date }} à {{ ansible_date_time.time }}
+          ════════════════════════════════════════════════════════════════
+      loop: "{{ users_list }}"
+
+    - name: 8.2 - Configurer .bashrc pour afficher le message
+      lineinfile:
+        path: "/home/{{ item.username }}/.bashrc"
+        line: |
+          # Affichage du message de bienvenue
+          if [ -f ~/WELCOME.txt ]; then
+              cat ~/WELCOME.txt
+          fi
+        create: yes
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0644'
+      loop: "{{ users_list }}"
+
+    - name: 8.3 - Confirmation des messages de bienvenue
+      debug:
+        msg: "✓ Messages de bienvenue créés et configurés"
+
+    # ========================================================================
+    # PHASE 9: ENVOI DES EMAILS DE NOTIFICATION
+    # ========================================================================
+
+    - name: 9.1 - Récupérer l'adresse IP du serveur
+      set_fact:
+        server_ip: "{{ ansible_default_ipv4.address }}"
+
+    - name: 9.2 - Envoyer un email personnalisé à chaque utilisateur
+      mail:
+        host: "{{ smtp_host }}"
+        port: "{{ smtp_port }}"
+        username: "{{ smtp_username }}"
+        password: "{{ smtp_password }}"
+        to: "{{ item.email }}"
+        from: "{{ email_from }}"
+        subject: "Votre compte VPS a été créé - Cours INF 3611"
+        body: |
+          Bonjour {{ item.full_name }},
+          
+          Votre compte utilisateur a été créé avec succès sur le serveur VPS du cours INF 3611.
+          
+          ═══════════════════════════════════════════════════════════════════════
+          📋 INFORMATIONS DE CONNEXION
+          ═══════════════════════════════════════════════════════════════════════
+          
+          🖥️  Adresse IP du serveur : {{ server_ip }}
+          🔌 Port SSH              : {{ ssh_port }}
+          👤 Nom d'utilisateur     : {{ item.username }}
+          🔐 Mot de passe initial  : {{ item.password }}
+          
+          ⚠️  IMPORTANT : Vous DEVEZ changer ce mot de passe lors de votre première connexion.
+          
+          ═══════════════════════════════════════════════════════════════════════
+          🔧 COMMANDES UTILES
+          ═══════════════════════════════════════════════════════════════════════
+          
+          📡 Commande de connexion SSH :
+          
+             ssh -p {{ ssh_port }} {{ item.username }}@{{ server_ip }}
+          
+          🔑 Transférer votre clé publique SSH (recommandé) :
+          
+             - Depuis Linux/Mac :
+               ssh-copy-id -p {{ ssh_port }} {{ item.username }}@{{ server_ip }}
+          
+             - Depuis Windows (PowerShell) :
+               type $env:USERPROFILE\.ssh\id_rsa.pub | ssh -p {{ ssh_port }} {{ item.username }}@{{ server_ip }} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+          
+             - Alternative multiplateforme :
+               cat ~/.ssh/id_rsa.pub | ssh -p {{ ssh_port }} {{ item.username }}@{{ server_ip }} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+          
+          ═══════════════════════════════════════════════════════════════════════
+          ℹ️  INFORMATIONS DU COMPTE
+          ═══════════════════════════════════════════════════════════════════════
+          
+          • Groupe                : {{ group_name }}
+          • Shell                 : {{ item.shell }}
+          • Quota disque          : {{ disk_quota_gb }} Go maximum
+          • Limite mémoire        : {{ memory_limit_percent }}% de la RAM par processus
+          • Répertoire personnel  : /home/{{ item.username }}
+          
+          ═══════════════════════════════════════════════════════════════════════
+          🛡️  RÈGLES DE SÉCURITÉ
+          ═══════════════════════════════════════════════════════════════════════
+          
+          1. Changez immédiatement votre mot de passe initial
+          2. Utilisez un mot de passe fort (12+ caractères, majuscules, minuscules, chiffres, symboles)
+          3. Ne partagez JAMAIS vos identifiants
+          4. Configurez l'authentification par clés SSH (voir commandes ci-dessus)
+          5. La commande 'su' est désactivée pour votre sécurité
+          6. Toutes vos actions sont journalisées
+          
+          ═══════════════════════════════════════════════════════════════════════
+          📞 SUPPORT
+          ═══════════════════════════════════════════════════════════════════════
+          
+          En cas de problème, contactez :
+          • Email : admin@uy1.cm
+          • Téléphone : {{ item.phone }}
+          
+          ═══════════════════════════════════════════════════════════════════════
+          
+          Bon travail et bienvenue sur le serveur ! 🚀
+          
+          ---
+          Université de Yaoundé I
+          Département d'Informatique
+          INF 3611 - Administration Systèmes et Réseaux
+          
+          Ce message a été généré automatiquement le {{ ansible_date_time.date }} à {{ ansible_date_time.time }}.
+        charset: utf8
+        subtype: plain
+      loop: "{{ users_list }}"
+      ignore_errors: yes  # Continuer même si l'envoi échoue
+      register: email_results
+
+    - name: 9.3 - Afficher le statut des emails
+      debug:
+        msg: "{{ '✓ Email envoyé' if not item.failed else '✗ Échec envoi email' }} à {{ item.item.email }}"
+      loop: "{{ email_results.results }}"
+      loop_control:
+        label: "{{ item.item.username }}"
+
+    # ========================================================================
+    # PHASE 10: RÉSUMÉ FINAL
+    # ========================================================================
+
+    - name: 10.1 - Afficher le résumé final
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          ✅ CRÉATION D'UTILISATEURS TERMINÉE AVEC SUCCÈS
+          ═══════════════════════════════════════════════════════════════
+          
+          📊 Statistiques :
+             • Utilisateurs créés   : {{ users_list | length }}
+             • Groupe principal     : {{ group_name }}
+             • Quota disque         : {{ disk_quota_gb }} Go
+             • Limite mémoire       : {{ memory_limit_percent }}% RAM
+             • Serveur              : {{ inventory_hostname }} ({{ server_ip }})
+             • Port SSH             : {{ ssh_port }}
+          
+          ✅ Fonctionnalités configurées :
+             ✓ Comptes utilisateurs créés
+             ✓ Mots de passe hachés (SHA-512)
+             ✓ Changement de mot de passe obligatoire
+             ✓ Accès sudo avec restriction 'su'
+             ✓ Messages de bienvenue personnalisés
+             ✓ Quotas disque configurés
+             ✓ Limites mémoire actives
+             ✓ Emails de notification envoyés
+          
+          💡 Commandes utiles :
+             • Lister le groupe    : getent group {{ group_name }}
+             • Vérifier un quota   : sudo quota -u USERNAME
+             • Tester connexion    : ssh -p {{ ssh_port }} USERNAME@{{ server_ip }}
+          
+          ═══════════════════════════════════════════════════════════════

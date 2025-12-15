@@ -1,0 +1,456 @@
+Partie 0 : Configuration et durcissement du serveur SSH
+📋 Description
+Guide complet pour configurer et sécuriser le service SSH avant la création d'utilisateurs. Cette partie est CRITIQUE car une mauvaise configuration peut vous bloquer l'accès à votre serveur.
+
+⚠️ AVERTISSEMENT IMPORTANT
+UNE ERREUR DANS LA CONFIGURATION SSH PEUT VOUS FAIRE PERDRE L'ACCÈS À VOTRE SERVEUR !
+
+Suivez STRICTEMENT la procédure décrite ci-dessous pour éviter de vous retrouver bloqué.
+
+🔐 Procédure correcte de modification
+Étape 1 : Sauvegarde
+bash
+# Créer une sauvegarde horodatée
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d_%H%M%S)
+
+# Vérifier la sauvegarde
+ls -lh /etc/ssh/sshd_config*
+Étape 2 : Modification
+bash
+# Éditer le fichier de configuration
+sudo nano /etc/ssh/sshd_config
+
+# OU avec vim
+sudo vim /etc/ssh/sshd_config
+Étape 3 : Test de syntaxe
+bash
+# TOUJOURS tester la configuration avant de l'appliquer
+sudo sshd -t
+
+# Si OK, vous verrez rien (silence = succès)
+# Si erreur, vous verrez le message d'erreur à corriger
+Étape 4 : Rechargement (PAS redémarrage)
+bash
+# Utiliser reload, PAS restart
+sudo systemctl reload sshd
+
+# Vérifier le statut
+sudo systemctl status sshd
+Étape 5 : Test avec NOUVELLE session
+CRITIQUE : Ne JAMAIS fermer votre session actuelle avant de tester !
+
+bash
+# Dans un NOUVEAU terminal/onglet, tester la connexion
+ssh -p NOUVEAU_PORT user@serveur
+
+# OU depuis une autre machine
+ssh -p NOUVEAU_PORT user@IP_SERVEUR
+Étape 6 : Validation finale
+bash
+# Une fois la nouvelle connexion établie, vous pouvez fermer l'ancienne
+# Si la connexion échoue, retournez à l'ancienne session et corrigez
+⚠️ Risque principal encouru
+Qu'est-ce qui peut mal tourner ?
+Si vous redémarrez le service SSH (systemctl restart sshd) avec une configuration incorrecte :
+
+Le service SSH s'arrête
+Il ne redémarre pas (erreur de config)
+Toutes les connexions SSH sont coupées
+Impossible de se reconnecter
+Accès au serveur perdu
+Conséquences
+Perte totale d'accès SSH au serveur
+Nécessité d'accès physique ou console de récupération
+Temps d'arrêt prolongé
+Perte potentielle de données si pas de backup
+Solution si vous êtes bloqué
+bash
+# Si vous avez accès à la console web du VPS
+# 1. Se connecter via console
+# 2. Restaurer la sauvegarde
+sudo cp /etc/ssh/sshd_config.backup /etc/ssh/sshd_config
+sudo systemctl restart sshd
+
+# Si impossible, réinstaller SSH
+sudo apt install --reinstall openssh-server
+🛡️ Paramètres de sécurité recommandés
+1. Changer le port SSH par défaut
+Justification : Le port 22 est la cible privilégiée des attaques automatisées. En changeant le port, vous réduisez considérablement les tentatives d'intrusion par des bots.
+
+bash
+# Avant (dans /etc/ssh/sshd_config)
+#Port 22
+
+# Après
+Port 2222
+Impact :
+
+✅ Réduit les attaques automatisées de ~99%
+✅ Logs d'intrusion beaucoup moins nombreux
+⚠️ Nécessite de spécifier le port à chaque connexion : ssh -p 2222 user@server
+2. Désactiver la connexion root directe
+Justification : L'utilisateur root a tous les privilèges. Forcer l'utilisation de comptes utilisateurs avec sudo améliore la traçabilité et la sécurité. En cas de compromission d'un mot de passe, l'attaquant n'a pas immédiatement les droits root.
+
+bash
+# Configuration
+PermitRootLogin no
+Impact :
+
+✅ Force l'utilisation de comptes utilisateurs
+✅ Meilleure traçabilité des actions administratives
+✅ Authentification en deux étapes (compte + sudo)
+⚠️ Nécessite de créer un compte utilisateur avec droits sudo AVANT d'appliquer
+Procédure sécurisée :
+
+bash
+# 1. Créer un utilisateur admin AVANT de désactiver root
+sudo adduser admin
+sudo usermod -aG sudo admin
+
+# 2. Tester la connexion avec le nouveau compte
+ssh admin@serveur
+sudo ls /root  # Tester sudo
+
+# 3. Une fois confirmé, désactiver root dans sshd_config
+3. Authentification par clés uniquement
+Justification : Les mots de passe peuvent être devinés par force brute. Les clés SSH (2048+ bits) sont pratiquement impossibles à casser. L'authentification par clés élimine complètement les attaques par force brute sur les mots de passe.
+
+bash
+# Configuration
+PasswordAuthentication no
+PubkeyAuthentication yes
+ChallengeResponseAuthentication no
+Impact :
+
+✅ Élimine 100% des attaques par force brute
+✅ Authentification beaucoup plus forte
+✅ Pas besoin de mémoriser de mots de passe
+⚠️ Nécessite de configurer les clés SSH AVANT d'appliquer
+Procédure sécurisée :
+
+bash
+# 1. Générer une paire de clés SSH (sur votre machine locale)
+ssh-keygen -t ed25519 -C "votre-email@example.com"
+# OU pour RSA
+ssh-keygen -t rsa -b 4096 -C "votre-email@example.com"
+
+# 2. Copier la clé publique sur le serveur
+ssh-copy-id -p PORT user@serveur
+
+# 3. Tester la connexion par clés
+ssh -p PORT user@serveur
+# Vous ne devriez PAS avoir à entrer de mot de passe
+
+# 4. Une fois confirmé, désactiver l'authentification par mot de passe
+sudo nano /etc/ssh/sshd_config
+# PasswordAuthentication no
+4. Limiter les tentatives d'authentification
+Justification : Limite le nombre de tentatives de connexion, rendant les attaques par force brute encore plus difficiles. Réduit également la charge CPU lors d'attaques massives.
+
+bash
+# Configuration
+MaxAuthTries 3
+MaxSessions 2
+MaxStartups 3:50:10
+Signification :
+
+MaxAuthTries 3 : Maximum 3 tentatives de mot de passe/clé par connexion
+MaxSessions 2 : Maximum 2 sessions SSH simultanées par connexion
+MaxStartups 3:50:10 : Gestion des connexions simultanées (3 non authentifiées, puis probabilité de refus jusqu'à 10)
+Impact :
+
+✅ Ralentit considérablement les attaques par force brute
+✅ Protège contre les attaques de déni de service (DoS)
+✅ Réduit la charge serveur lors d'attaques
+5. Désactiver les protocoles et fonctionnalités faibles
+Justification : SSH version 1 a des vulnérabilités connues. Les mots de passe vides sont une faille de sécurité évidente. Le X11 forwarding peut être exploité s'il n'est pas nécessaire.
+
+bash
+# Configuration
+Protocol 2
+PermitEmptyPasswords no
+X11Forwarding no
+PermitUserEnvironment no
+Impact :
+
+✅ Utilise uniquement SSH v2 (plus sécurisé)
+✅ Empêche les comptes sans mot de passe
+✅ Désactive les fonctionnalités inutilisées (réduction de la surface d'attaque)
+ℹ️ Mettre X11Forwarding yes si vous avez besoin d'applications graphiques distantes
+6. Timeouts et déconnexions automatiques
+Justification : Les sessions inactives sont des points d'entrée potentiels si quelqu'un s'éloigne de sa machine sans se déconnecter. Les timeouts forcent la déconnexion automatique.
+
+bash
+# Configuration
+ClientAliveInterval 300
+ClientAliveCountMax 2
+LoginGraceTime 60
+TCPKeepAlive yes
+Signification :
+
+ClientAliveInterval 300 : Envoie un message "keep-alive" toutes les 5 minutes
+ClientAliveCountMax 2 : Après 2 messages sans réponse, déconnecte (10 minutes d'inactivité)
+LoginGraceTime 60 : Temps maximum pour s'authentifier : 60 secondes
+TCPKeepAlive yes : Maintient la connexion TCP active
+Impact :
+
+✅ Déconnexion automatique après 10 minutes d'inactivité
+✅ Protection contre les sessions abandonnées
+✅ Libère les ressources serveur
+7. Limiter les utilisateurs/groupes autorisés
+Justification : Contrôle précis de qui peut se connecter via SSH. Implémente le principe du moindre privilège (least privilege).
+
+bash
+# Configuration - Choisir UNE des options
+
+# Option 1: Autoriser uniquement certains utilisateurs
+AllowUsers alice bob charlie admin
+
+# Option 2: Autoriser uniquement certains groupes
+AllowGroups students-inf-361 admins
+
+# Option 3: Combiner (recommandé)
+AllowUsers admin
+AllowGroups students-inf-361
+
+# Option 4: Bloquer certains utilisateurs (moins recommandé)
+DenyUsers guest test
+Impact :
+
+✅ Contrôle granulaire des accès SSH
+✅ Facile à maintenir via la gestion de groupes
+✅ Empêche les comptes système de se connecter
+8. Paramètres de chiffrement renforcés
+Justification : Utiliser les algorithmes de chiffrement les plus modernes et sécurisés. Désactiver les anciens algorithmes faibles.
+
+bash
+# Configuration avancée
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256
+HostKeyAlgorithms ssh-ed25519,ssh-rsa
+Impact :
+
+✅ Utilise uniquement les algorithmes modernes et sécurisés
+✅ Protection contre les attaques cryptographiques connues
+⚠️ Peut causer des problèmes de compatibilité avec de très vieux clients SSH
+9. Bannière et logging
+Justification : Avertissement légal et traçabilité complète des connexions.
+
+bash
+# Configuration
+Banner /etc/ssh/banner
+LogLevel VERBOSE
+SyslogFacility AUTH
+Créer la bannière :
+
+bash
+sudo nano /etc/ssh/banner
+Contenu suggéré :
+
+╔════════════════════════════════════════════════════════════════╗
+║                   ACCÈS AUTORISÉ UNIQUEMENT                    ║
+║                                                                ║
+║  Ceci est un système privé. L'accès non autorisé est interdit ║
+║  et sera poursuivi conformément à la loi. Toutes les actions  ║
+║  sont enregistrées et surveillées.                             ║
+║                                                                ║
+║  Université de Yaoundé I - Département d'Informatique          ║
+╚════════════════════════════════════════════════════════════════╝
+Impact :
+
+✅ Avertissement légal affiché avant connexion
+✅ Logs détaillés de toutes les tentatives de connexion
+✅ Aide à l'investigation en cas d'incident
+📝 Configuration complète recommandée
+Voici un fichier /etc/ssh/sshd_config complet et sécurisé :
+
+bash
+# ============================================================================
+# Configuration SSH sécurisée - INF 3611
+# Université de Yaoundé I - Département d'Informatique
+# ============================================================================
+
+# Paramètres de base
+Port 2222
+Protocol 2
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# Authentification
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+ChallengeResponseAuthentication no
+PermitEmptyPasswords no
+UsePAM yes
+
+# Limitations
+MaxAuthTries 3
+MaxSessions 2
+MaxStartups 3:50:10
+LoginGraceTime 60
+
+# Contrôle d'accès
+AllowGroups students-inf-361 sudo
+# AllowUsers admin alice bob
+
+# Timeouts
+ClientAliveInterval 300
+ClientAliveCountMax 2
+TCPKeepAlive yes
+
+# Fonctionnalités
+X11Forwarding no
+PrintMotd no
+PrintLastLog yes
+PermitUserEnvironment no
+PermitTunnel no
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+GatewayPorts no
+
+# Chiffrement (moderne)
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+HostKeyAlgorithms ssh-ed25519,ssh-rsa
+
+# Logging
+SyslogFacility AUTH
+LogLevel VERBOSE
+
+# Bannière
+Banner /etc/ssh/banner
+
+# Subsystem SFTP
+Subsystem sftp /usr/lib/openssh/sftp-server
+🔧 Application de la configuration
+Script d'application sécurisée
+bash
+#!/bin/bash
+# apply_ssh_config.sh
+
+echo "════════════════════════════════════════════════════════"
+echo "   Application sécurisée de la configuration SSH"
+echo "════════════════════════════════════════════════════════"
+
+# 1. Sauvegarde
+echo "📁 Création de la sauvegarde..."
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d_%H%M%S)
+
+# 2. Modification (décommenter après avoir préparé votre config)
+# echo "✏️  Application de la nouvelle configuration..."
+# sudo cp sshd_config.secure /etc/ssh/sshd_config
+
+# 3. Test de syntaxe
+echo "🔍 Test de la syntaxe..."
+if sudo sshd -t; then
+    echo "✅ Configuration valide"
+else
+    echo "❌ Erreur de configuration! Restauration de la sauvegarde..."
+    sudo cp /etc/ssh/sshd_config.backup.* /etc/ssh/sshd_config
+    exit 1
+fi
+
+# 4. Reload
+echo "🔄 Rechargement du service..."
+sudo systemctl reload sshd
+
+# 5. Vérification
+echo "✓ Vérification du statut..."
+sudo systemctl status sshd --no-pager
+
+echo ""
+echo "════════════════════════════════════════════════════════"
+echo "⚠️  IMPORTANT: Testez la connexion dans un NOUVEAU"
+echo "   terminal AVANT de fermer cette session!"
+echo ""
+echo "   ssh -p 2222 user@$(hostname -I | awk '{print $1}')"
+echo "════════════════════════════════════════════════════════"
+🔍 Vérification et tests
+Vérifier la configuration actuelle
+bash
+# Afficher la config active (sans commentaires)
+sudo grep -v '^#' /etc/ssh/sshd_config | grep -v '^$'
+
+# Tester la syntaxe
+sudo sshd -t -f /etc/ssh/sshd_config
+
+# Vérifier le port d'écoute
+sudo netstat -tlnp | grep sshd
+# OU
+sudo ss -tlnp | grep sshd
+Tests de connexion
+bash
+# Test depuis localhost
+ssh -p 2222 localhost
+
+# Test avec verbosité (debug)
+ssh -vvv -p 2222 user@serveur
+
+# Tester l'authentification par clés
+ssh -i ~/.ssh/id_rsa -p 2222 user@serveur
+
+# Tester depuis une autre machine
+ssh -p 2222 user@IP_PUBLIQUE
+Vérifier les logs
+bash
+# Logs SSH en temps réel
+sudo tail -f /var/log/auth.log
+
+# Filtrer les tentatives de connexion
+sudo grep sshd /var/log/auth.log | tail -20
+
+# Voir les échecs d'authentification
+sudo grep "Failed password" /var/log/auth.log
+
+# Voir les connexions réussies
+sudo grep "Accepted" /var/log/auth.log
+🛡️ Protection supplémentaire avec Fail2ban
+bash
+# Installer Fail2ban
+sudo apt install fail2ban
+
+# Configurer pour SSH
+sudo nano /etc/fail2ban/jail.local
+ini
+[sshd]
+enabled = true
+port = 2222
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+bash
+# Redémarrer Fail2ban
+sudo systemctl restart fail2ban
+
+# Vérifier le statut
+sudo fail2ban-client status sshd
+📚 Références
+OpenSSH Documentation
+SSH Best Practices
+CIS Benchmarks for SSH
+✅ Checklist de sécurité
+ Sauvegarde de la configuration créée
+ Port SSH changé (différent de 22)
+ PermitRootLogin désactivé
+ Authentification par clés configurée
+ PasswordAuthentication désactivé (après config clés)
+ MaxAuthTries limité à 3
+ Timeouts configurés
+ AllowGroups ou AllowUsers configuré
+ Bannière créée et activée
+ LogLevel défini sur VERBOSE
+ Configuration testée avec sshd -t
+ Service rechargé (reload, pas restart)
+ Nouvelle connexion testée avant fermeture
+ Fail2ban installé et configuré
+ Documentation créée pour l'équipe
+👤 Auteur
+Étudiant Licence 3 Informatique - Université de Yaoundé I
+Cours: INF 3611 - Administration Systèmes et Réseaux
+
